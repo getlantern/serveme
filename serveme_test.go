@@ -3,6 +3,7 @@ package serveme
 import (
 	"io"
 	"testing"
+	"time"
 
 	"github.com/getlantern/golog"
 	"github.com/getlantern/testify/assert"
@@ -16,7 +17,7 @@ const (
 
 var tlog = golog.LoggerFor("serveme-test")
 
-func Test(t *testing.T) {
+func TestSuccess(t *testing.T) {
 	dialer, err := At("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Unable to start dialer: %s", err)
@@ -29,9 +30,15 @@ func Test(t *testing.T) {
 	l2 := testListener(t, "Message 2")
 	startSignaling(t, dialer, l1, l2)
 
-	conn1 := dialer.Dial(1)
+	conn1, err := dialer.Dial(1)
+	if err != nil {
+		t.Fatalf("Unable to dial server 1")
+	}
 	defer conn1.Close()
-	conn2 := dialer.Dial(2)
+	conn2, err := dialer.Dial(2)
+	if err != nil {
+		t.Fatalf("Unable to dial server 2")
+	}
 	defer conn2.Close()
 
 	b1 := make([]byte, 9)
@@ -45,6 +52,18 @@ func Test(t *testing.T) {
 	assert.NoError(t, err, "Reading from conn2 should have succeeded")
 	assert.Equal(t, 9, n2, "Reading from conn2 should have resulted in 9 bytes")
 	assert.Equal(t, []byte("Message 2"), b2[:n2], "Conn1 should have read 'Message 2'")
+}
+
+func TestTimeout(t *testing.T) {
+	dialer, err := At("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Unable to start dialer: %s", err)
+	}
+	defer dialer.Close()
+	dialer.Timeout = 1 * time.Nanosecond
+	_, err = dialer.Dial(1)
+	assert.Error(t, err, "Dialing should have errored")
+	assert.Contains(t, err.Error(), "timed out", "Error should have been timeout error")
 }
 
 func testListener(t *testing.T, msg string) *Listener {

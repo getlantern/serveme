@@ -17,10 +17,12 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/getlantern/buuid"
 	"github.com/getlantern/framed"
 	"github.com/getlantern/golog"
+	"github.com/getlantern/withtimeout"
 )
 
 var (
@@ -41,10 +43,14 @@ type Request struct {
 
 // Dialer provides a mechanism for dialing servers by ServerId.
 type Dialer struct {
+	// Timeout is the timeout for dials.  Defaults to 30 seconds.
+	Timeout time.Duration
+
 	// Requests is a channel on which requests to dial this dialer are posted.
 	// The signaling channel should forward these to the server identified by
 	// the Server parameter.
-	Requests     <-chan *Request
+	Requests <-chan *Request
+
 	requests     chan *Request
 	network      string
 	connChs      map[buuid.ID]chan<- net.Conn
@@ -63,6 +69,7 @@ func At(network, address string) (*Dialer, error) {
 	}
 	requests := make(chan *Request, 1000)
 	d := &Dialer{
+		Timeout:  30 * time.Second,
 		Requests: requests,
 		requests: requests,
 		network:  network,
@@ -80,7 +87,7 @@ func (d *Dialer) Addr() net.Addr {
 }
 
 // Dial dials the server at the given ServerId.
-func (d *Dialer) Dial(server ServerId) net.Conn {
+func (d *Dialer) Dial(server ServerId) (net.Conn, error) {
 	id := buuid.Random()
 	connCh := make(chan net.Conn)
 
@@ -89,20 +96,26 @@ func (d *Dialer) Dial(server ServerId) net.Conn {
 	d.connChs[id] = connCh
 	d.connChsMutex.Unlock()
 
-	log.Tracef("Sending request for id: %s", id)
-	d.requests <- &Request{
-		Server:  server,
-		ID:      id,
-		Network: d.network,
-		Address: d.l.Addr().String(),
-	}
+	c, _, err := withtimeout.Do(d.Timeout, func() (interface{}, error) {
+		log.Tracef("Sending request for id: %s", id)
+		d.requests <- &Request{
+			Server:  server,
+			ID:      id,
+			Network: d.network,
+			Address: d.l.Addr().String(),
+		}
 
-	log.Tracef("Waiting for connection for id: %s", id)
-	conn := <-connCh
-	d.connChsMutex.Lock()
-	delete(d.connChs, id)
-	d.connChsMutex.Unlock()
-	return conn
+		log.Tracef("Waiting for connection for id: %s", id)
+		conn := <-connCh
+		d.connChsMutex.Lock()
+		delete(d.connChs, id)
+		d.connChsMutex.Unlock()
+		return conn, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return c.(net.Conn), nil
 }
 
 // Close closes this dialer.

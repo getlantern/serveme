@@ -23,7 +23,10 @@ func ExampleAt() {
 		}
 	}()
 
-	conn := dialer.Dial("server's id on signaling channel")
+	conn, err := dialer.Dial("server's id on signaling channel")
+	if err != nil {
+		elog.Fatalf("Unable to dial: %s", err)
+	}
 	defer conn.Close()
 	io.Copy(os.Stdout, conn)
 }
