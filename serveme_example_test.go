@@ -30,6 +30,7 @@ func ExampleAt() {
 
 func ExampleListen() {
 	l := serveme.Listen()
+	defer l.Close()
 
 	// Process inbound requests from signaling channel
 	go func() {
