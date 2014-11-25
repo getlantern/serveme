@@ -4,10 +4,12 @@ import (
 	"io"
 	elog "log"
 	"os"
+
+	serveme "."
 )
 
 func ExampleAt() {
-	dialer, err := At("tcp", "localhost:0")
+	dialer, err := serveme.At("tcp", "localhost:0")
 	if err != nil {
 		elog.Fatalf("Unable to start dialer: %s", err)
 	}
@@ -27,12 +29,12 @@ func ExampleAt() {
 }
 
 func ExampleListen() {
-	l := Listen()
+	l := serveme.Listen()
 
 	// Process inbound requests from signaling channel
 	go func() {
 		// TODO: read request from signaling channel
-		var req *Request
+		var req *serveme.Request
 		l.Requests <- req
 	}()
 
