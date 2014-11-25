@@ -1,8 +1,8 @@
-// package serveme implements a dial function and a net.Listener that allow
-// a client and server to communicate by having the server contact the client
-// rather than the other way around. This is handy in situations where the
-// client is reachable using an IP and port, but the server isn't (for example
-// if the server is behind an impenetrable NAT).
+// package serveme implements a Dialer and a net.Listener that allow a client
+// and server to communicate by having the server contact the client rather than
+// the other way around. This is handy in situations where the client is
+// reachable using an IP and port, but the server isn't (for example if the
+// server is behind an impenetrable NAT).
 //
 // For this to work, the client and server must be able to communicate with each
 // other via a signaling channel. When the client wants to connect to the
