@@ -34,7 +34,7 @@ func Test(t *testing.T) {
 			assert.NoError(t, err, "Should have been able to close: ", closer)
 		}
 		numFilesAtEnd := countTCPFiles()
-		assert.Equal(t, numFilesAtStart, numFilesAtEnd, "Number of TCP file descriptors should have remained between start and end of test")
+		assert.Equal(t, numFilesAtStart, numFilesAtEnd, "Number of TCP file descriptors should have remained constant between start and end of test")
 	}()
 
 	dialer, err := At("tcp", "localhost:0")
@@ -85,11 +85,17 @@ func Test(t *testing.T) {
 }
 
 func TestRapidTimeout(t *testing.T) {
+	numFilesAtStart := countTCPFiles()
 	dialer, err := At("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Unable to start dialer: %s", err)
 	}
-	defer dialer.Close()
+	defer func() {
+		dialer.Close()
+		numFilesAtEnd := countTCPFiles()
+		assert.Equal(t, numFilesAtStart, numFilesAtEnd, "Number of TCP file descriptors should have remained constant between start and end of test")
+	}()
+
 	dialer.Timeout = 1 * time.Nanosecond
 	_, err = dialer.Dial(1)
 	assert.Error(t, err, "Dialing should have errored")
@@ -104,7 +110,7 @@ func testListener(t *testing.T, msg string) *Listener {
 		for {
 			conn, err := l.Accept()
 			if err != nil {
-				log.Debugf("Unable to listen: %s", err)
+				log.Tracef("Unable to listen: %s", err)
 				continue
 			}
 			log.Tracef("Writing message: %s", msg)
