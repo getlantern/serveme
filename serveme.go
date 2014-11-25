@@ -99,7 +99,6 @@ func (d *Dialer) Dial(server ServerId) (net.Conn, error) {
 		d.connChsMutex.Lock()
 		delete(d.connChs, id)
 		d.connChsMutex.Unlock()
-		close(connCh)
 	}()
 
 	c, _, err := withtimeout.Do(d.Timeout, func() (interface{}, error) {
@@ -150,7 +149,12 @@ func (d *Dialer) run() {
 		}
 		log.Tracef("Making conn %s available", id)
 		d.connChsMutex.RLock()
-		d.connChs[id] <- conn
+		connCh := d.connChs[id]
+		if connCh != nil {
+			d.connChs[id] <- conn
+		} else {
+			log.Tracef("connCh was nil, Dialer must have timed out")
+		}
 		d.connChsMutex.RUnlock()
 	}
 }
