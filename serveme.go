@@ -52,7 +52,7 @@ type Dialer struct {
 	l            net.Listener
 }
 
-// At constructs a Dialer that listens at the given net and addr
+// At constructs a Dialer that listens at the given network and address.
 func At(network, address string) (*Dialer, error) {
 	if !strings.Contains(network, "tcp") {
 		panic("Only tcp is currently supported")
@@ -73,11 +73,13 @@ func At(network, address string) (*Dialer, error) {
 	return d, nil
 }
 
+// Addr returns the address at which this Dialer is listening for connections
+// from servers.
 func (d *Dialer) Addr() net.Addr {
 	return d.l.Addr()
 }
 
-// Dial dials the server at the given ServerId
+// Dial dials the server at the given ServerId.
 func (d *Dialer) Dial(server ServerId) net.Conn {
 	id := buuid.Random()
 	connCh := make(chan net.Conn)
@@ -103,6 +105,7 @@ func (d *Dialer) Dial(server ServerId) net.Conn {
 	return conn
 }
 
+// Close closes this dialer.
 func (d *Dialer) Close() error {
 	close(d.requests)
 	return d.l.Close()
@@ -134,14 +137,14 @@ func (d *Dialer) run() {
 	}
 }
 
+// Listener implements the net.Listener interface.
 type Listener struct {
 	Requests chan<- *Request
 	requests chan *Request
 }
 
 // Listen constructs a Listener that listens by responding to connection
-// requests from the given channel. It also returns a channel to which to write
-// connection requests received from the signaling channel.
+// requests sent to its Requests channel.
 //
 // Note - the Addr() method on the returned Listener is unimplemented and will
 // panic if called.
@@ -177,7 +180,8 @@ func (l *Listener) Close() error {
 	return nil
 }
 
-// Addr implements the method from net.Listener.
+// Addr implements the method from net.Listener but panics, since there's no
+// implementation actually available.
 func (l *Listener) Addr() net.Addr {
 	panic("Method Addr() not implemented!")
 }
