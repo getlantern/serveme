@@ -27,6 +27,9 @@ import (
 
 var (
 	log = golog.LoggerFor("serveme")
+
+	defaultDialTimeout     = 30 * time.Second
+	defaultListenerTimeout = 30 * time.Second
 )
 
 // ServerId is an opaque identifier for a server used by the signaling channel.
@@ -69,7 +72,7 @@ func At(network, address string) (*Dialer, error) {
 	}
 	requests := make(chan *Request, 1000)
 	d := &Dialer{
-		Timeout:  30 * time.Second,
+		Timeout:  defaultDialTimeout,
 		Requests: requests,
 		requests: requests,
 		network:  network,
@@ -134,8 +137,7 @@ func (d *Dialer) run() {
 			log.Tracef("Unable to accept: %s", err)
 			return
 		}
-		fr := framed.NewReader(conn)
-		_, err = fr.Read(b)
+		_, err = framed.NewReader(conn).Read(b)
 		if err != nil {
 			log.Tracef("Unable to read conn id bytes: %s", err)
 			conn.Close()
@@ -161,6 +163,12 @@ func (d *Dialer) run() {
 
 // Listener implements the net.Listener interface.
 type Listener struct {
+	// Timeout controls how long the Listener is willing to take for dialing
+	// the client and writing the connection id. It defaults to 30 seconds.
+	Timeout time.Duration
+
+	// Requests is a channel on which to post requests to dial a dialer received
+	// from the signaling channel.
 	Requests chan<- *Request
 	requests chan *Request
 }
@@ -173,6 +181,7 @@ type Listener struct {
 func Listen() *Listener {
 	requests := make(chan *Request, 1000)
 	return &Listener{
+		Timeout:  defaultListenerTimeout,
 		Requests: requests,
 		requests: requests,
 	}
@@ -182,14 +191,18 @@ func Listen() *Listener {
 func (l *Listener) Accept() (net.Conn, error) {
 	req := <-l.requests
 	log.Tracef("Dialing %s %s", req.Network, req.Address)
-	conn, err := net.Dial(req.Network, req.Address)
+	start := time.Now()
+	conn, err := net.DialTimeout(req.Network, req.Address, l.Timeout)
 	if err != nil {
 		return nil, err
 	}
-	fw := framed.NewWriter(conn)
+	dialTime := time.Now().Sub(start)
 
-	log.Trace("Writing connection id to identify connection")
-	_, err = fw.Write(req.ID.ToBytes())
+	_, _, err = withtimeout.Do(l.Timeout-dialTime, func() (interface{}, error) {
+		log.Trace("Writing connection id to identify connection")
+		return framed.NewWriter(conn).Write(req.ID.ToBytes())
+	})
+
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("Unable to write connection id: %s", err)

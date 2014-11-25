@@ -84,7 +84,7 @@ func Test(t *testing.T) {
 	assert.Equal(t, []byte("Message 2"), b2[:n2], "Conn1 should have read 'Message 2'")
 }
 
-func TestRapidTimeout(t *testing.T) {
+func TestRapidDialTimeout(t *testing.T) {
 	numFilesAtStart := countTCPFiles()
 	dialer, err := At("tcp", "localhost:0")
 	if err != nil {
@@ -101,6 +101,33 @@ func TestRapidTimeout(t *testing.T) {
 	assert.Error(t, err, "Dialing should have errored")
 	if err != nil {
 		assert.Contains(t, err.Error(), "timed out", "Error should have been timeout error")
+	}
+}
+
+func TestRapidListenerTimeout(t *testing.T) {
+	numFilesAtStart := countTCPFiles()
+	dialer, err := At("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Unable to start dialer: %s", err)
+	}
+	l := Listen()
+	l.Timeout = 1 * time.Nanosecond
+	go func() {
+		dialer.Dial(nil)
+	}()
+
+	defer func() {
+		dialer.Close()
+		l.Close()
+		numFilesAtEnd := countTCPFiles()
+		assert.Equal(t, numFilesAtStart, numFilesAtEnd, "Number of TCP file descriptors should have remained constant between start and end of test")
+	}()
+
+	l.Requests <- <-dialer.Requests
+	_, err = l.Accept()
+	assert.Error(t, err, "Accept should have errored")
+	if err != nil {
+		assert.Contains(t, err.Error(), "timeout", "Error should have been timeout error")
 	}
 }
 
