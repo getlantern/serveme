@@ -64,6 +64,9 @@ func TestTimeout(t *testing.T) {
 	_, err = dialer.Dial(1)
 	assert.Error(t, err, "Dialing should have errored")
 	assert.Contains(t, err.Error(), "timed out", "Error should have been timeout error")
+	dialer.connChsMutex.Lock()
+	assert.Empty(t, dialer.connChs, "connChs should be empty after timing out")
+	dialer.connChsMutex.Unlock()
 }
 
 func testListener(t *testing.T, msg string) *Listener {

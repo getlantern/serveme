@@ -95,6 +95,12 @@ func (d *Dialer) Dial(server ServerId) (net.Conn, error) {
 	d.connChsMutex.Lock()
 	d.connChs[id] = connCh
 	d.connChsMutex.Unlock()
+	defer func() {
+		d.connChsMutex.Lock()
+		delete(d.connChs, id)
+		d.connChsMutex.Unlock()
+		close(connCh)
+	}()
 
 	c, _, err := withtimeout.Do(d.Timeout, func() (interface{}, error) {
 		log.Tracef("Sending request for id: %s", id)
@@ -107,9 +113,6 @@ func (d *Dialer) Dial(server ServerId) (net.Conn, error) {
 
 		log.Tracef("Waiting for connection for id: %s", id)
 		conn := <-connCh
-		d.connChsMutex.Lock()
-		delete(d.connChs, id)
-		d.connChsMutex.Unlock()
 		return conn, nil
 	})
 	if err != nil {
@@ -146,7 +149,9 @@ func (d *Dialer) run() {
 			continue
 		}
 		log.Tracef("Making conn %s available", id)
+		d.connChsMutex.RLock()
 		d.connChs[id] <- conn
+		d.connChsMutex.RUnlock()
 	}
 }
 
